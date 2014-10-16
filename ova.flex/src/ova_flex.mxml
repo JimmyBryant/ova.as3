@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600" applicationComplete="init()">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.brokenfunction.json.decodeJson;
+			
+			import flash.external.ExternalInterface;
+			
+			import org.openvideoads.base.Debuggable;
+			import org.openvideoads.util.DisplayProperties;
+			import org.openvideoads.vast.*;
+			import org.openvideoads.vast.VASTController;
+			import org.openvideoads.vast.events.OverlayAdDisplayEvent;
+			import org.openvideoads.vast.server.events.TemplateEvent;
+			import org.openvideoads.vast.server.response.*;
+			import org.openvideoads.vast.tracking.TimeEvent;
+			
+			private var config_url:String = "http://work.ikugua.com/server/afv_conf/ova_conf.json";
+			
+			private var _vastController:VASTController = new VASTController();			
+			private var config:Object;
+			
+			public function init():void{		
+				requetConfig(config_url);
+			}
+			
+			//请求OVA Config文件
+			private function requetConfig(url:String):void{
+				var req:URLRequest = new URLRequest();
+				req.url = url;
+				req.method = URLRequestMethod.GET;
+				
+				var loader:URLLoader = new URLLoader();
+				loader.addEventListener(Event.COMPLETE,onConfigLoaded);
+				loader.load(req);
+			}
+			
+			// 配置文件加载成功后触发
+			private function onConfigLoaded(e:Event):void{
+				var dataStr:String = e.target.data;
+				config = decodeJson(dataStr);
+				_vastController.startStreamSafetyMargin = 100;
+				_vastController.endStreamSafetyMargin = 300;
+				// 初始化_vastController对象
+				_vastController.initialise(config);
+				//setDefaultPlayerConfigGroup();
+				_vastController.enableRegionDisplay(
+					new DisplayProperties(
+						this.stage, 
+						640, 
+						360,
+						'normal',
+						_vastController.getActiveDisplaySpecification(false),
+						false,
+						0,
+						300
+					)
+				);
+				
+				_vastController.addEventListener(TemplateEvent.LOADED,onTemplateLoaded);
+				_vastController.addEventListener(OverlayAdDisplayEvent.DISPLAY, onDisplayOverlay);
+				_vastController.load();
+			}
+			
+			// VASt Template 加载完成
+			private function onTemplateLoaded(event:TemplateEvent):void{
+				trace('template loaded');
+				if(event.template != null) {
+					if(event.template.hasAds()) {
+						ExternalInterface.call("console.log","PLUGIN NOTIFICATION: VAST template loaded - " + event.template.ads.length + " ads retrieved", Debuggable.DEBUG_VAST_TEMPLATE); 
+					}
+					else {	
+						ExternalInterface.call("console.log","PLUGIN NOTIFICATION: No ads to be scheduled - only show streams will be played", Debuggable.DEBUG_VAST_TEMPLATE);
+					}
+				}
+				else {
+					ExternalInterface.call("console.log","PLUGIN NOTIFICATION: No ads to be scheduled - only show streams will be played", Debuggable.DEBUG_PLAYLIST);
+				}
+				//loadRuntimePlaylistAfterTemplateLoadEvent(); 
+				_vastController.processTimeEvent(0,new TimeEvent(0,20));
+			};
+			
+			protected function setDefaultPlayerConfigGroup():void {
+				var controlsHeight:Number = 30;
+				_vastController.setDefaultPlayerConfigGroup(
+					{
+						width: 640, 
+						height: 360, 
+						controls: { 
+							height: controlsHeight
+						},
+						margins: {
+							normal: {
+								withControls: controlsHeight,
+								withoutControls: 0
+							},
+							fullscreen: {
+								withControls: controlsHeight,
+								withoutControls: 0
+							}
+						},
+						modes: {
+							linear: {
+								controls: {
+									stream: {
+										visible: true,
+										manage: true,
+										enablePlay: true,
+										enablePause: true,
+										enablePlaylist: false,
+										enableTime: false,
+										enableFullscreen: true,
+										enableMute: true,
+										enableVolume: true
+									},
+									vpaid: {
+										visible: false,
+										manage: true,
+										enabled: false
+									}
+								}
+							},
+							nonLinear: {
+								margins: {
+									fullscreen: {
+										withControls: controlsHeight,
+										withoutControls: 0
+									}
+								}
+							}
+						}
+					}
+				);
+				_vastController.config.playerConfig = _vastController.getDefaultPlayerConfig();
+	
+			}
+			
+			private function loadRuntimePlaylistAfterTemplateLoadEvent():void{
+				
+			}
+			
+			private function onTemplateLoadError(event:TemplateEvent):void{
+				
+			};
+			
+			// 展示overlay广告时触发
+			private function onDisplayOverlay(displayEvent:OverlayAdDisplayEvent):void{
+				ExternalInterface.call("console.log","PLUGIN NOTIFICATION: 展现悬浮广告 Event received to display non-linear overlay ad (" + displayEvent.toString() + ")", Debuggable.DEBUG_DISPLAY_EVENTS);
+			}
+		]]>
+	</fx:Script>
+
+</s:Application>
